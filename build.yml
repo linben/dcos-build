@@ -1,0 +1,84 @@
+- hosts: build
+  
+  tasks:
+    - name: Loading variables
+      include_vars: default_vars
+
+    - name: Add DNS
+      shell: if [ $(grep nameserver /etc/resolv.conf | wc -l) -eq "0"  ]; then echo "nameserver 172.31.0.2" | tee -a /etc/resolv.conf >/dev/null; fi
+
+    - name: Update apt packages 
+      apt:
+        update_cache: yes
+
+    - name: Install dependencies
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - make
+        - build-essential
+        - libssl-dev
+        - zlib1g-dev
+        - libbz2-dev 
+        - libreadline-dev
+        - libsqlite3-dev
+        - wget
+        - curl
+        - llvm
+        - libncurses5-dev
+        - libncursesw5-dev
+        - xz-utils
+        - liblzma-dev
+        - python3-venv
+
+    - name: Download pyenv
+      get_url: 
+        url: https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer
+        dest: /home/ubuntu/
+        mode: 755
+
+    - name: Install pyenv
+      shell: ./pyenv-installer
+      args:
+        chdir: /home/ubuntu/
+
+    - name: Add pyenv to bashrc
+      blockinfile: 
+        path: ~/.bash_profile
+        create: yes
+        block: |
+            export PATH="/root/.pyenv/bin:$PATH"
+            eval "$(pyenv init -)"
+            eval "$(pyenv virtualenv-init -)"
+        
+    - name: Install python3.6
+      shell: . ~/.bash_profile && pyenv install 3.6.3 || true
+    
+    - name: Create DC/OS virtualenv
+      shell: . ~/.bash_profile && pyenv virtualenv 3.6.3 dcos || true
+
+    - name: Activate environment
+      shell: . ~/.bash_profile && pyenv activate dcos || true
+
+    - name: Clone DC/OS repo
+      git:
+        repo: 'https://github.com/dcos/dcos.git'
+        dest: $HOME/universe
+        version: "{{ dcos_version }}"
+
+    - name: Build DC/OS 
+      shell: ./build_local.sh
+      args:
+        chdir: /root/universe
+
+    - name: Retrieve git commit
+      shell: bash dcos_generate_config.sh --version && grep -ae "DCOS_IMAGE_COMMIT=" dcos_generate_config.sh
+      args:
+        chdir: /root/dcos-artifacts/testing/root
+  
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ aws_access_key_id }}"
+    AWS_SECRET_ACCESS_KEY: "{{ aws_secret_access_key }}" 
+    AWS_SESSION_TOKEN: "{{ aws_session_token }}"
+    AWS_DEFAULT_REGION: "{{ aws_default_region }}"

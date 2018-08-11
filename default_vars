@@ -1,0 +1,11 @@
+---
+
+# DC/OS version
+dcos_version: master
+
+# AWS credentials
+aws_access_key_id: 'accesskey'
+aws_secret_access_key: 'secretkey'
+aws_session_token: 'sessiontoken'
+aws_default_region: 'region'
+
